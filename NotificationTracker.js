@@ -24,7 +24,7 @@ function doPost(e) {
       .createTextOutput(JSON.stringify({ success: true }))
       .setMimeType(ContentService.MimeType.JSON);
 
-  } catch(error) {
+  } catch (error) {
     return ContentService
       .createTextOutput(JSON.stringify({ success: false, error: error.toString() }))
       .setMimeType(ContentService.MimeType.JSON);
@@ -49,25 +49,25 @@ function testInsertar() {
 }
 
 // ─── CONFIGURACIÓN ───────────────────────────────────────────
-const SHEET_2026      = '2026';
+const SHEET_2026 = '2026';
 const DRIVE_FOLDER_ID = '1fqJLvkrSS2kCnS1FVXp_LLTJpZR9A2aO';
-const GEMINI_API_KEY  = 'AIzaSyBf0Q6vEmzVqOYJeWxnSWUgnPVdkxBNvFQ';
+const GEMINI_API_KEY = PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY');
 const MODEL = "gemini-3.1-flash-lite";
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1/models/${MODEL}:generateContent?key=${GEMINI_API_KEY}`;;
 
-const COL_FECHA   = 4; // D
-const COL_GASTO   = 3; // C
+const COL_FECHA = 4; // D
+const COL_GASTO = 3; // C
 const COL_FACTURA = 7; // G
 // ─────────────────────────────────────────────────────────────
 const SHEET_PENDIENTES = 'Facturas Pendientes';
 // ─────────────────────────────────────────────────────────────
 
 function procesarFacturasNuevas() {
-  const props     = PropertiesService.getScriptProperties();
+  const props = PropertiesService.getScriptProperties();
   const procesados = JSON.parse(props.getProperty('archivos_procesados') || '[]');
 
   const folder = DriveApp.getFolderById(DRIVE_FOLDER_ID);
-  const files  = folder.getFiles();
+  const files = folder.getFiles();
   const nuevos = [];
 
   while (files.hasNext()) {
@@ -83,14 +83,14 @@ function procesarFacturasNuevas() {
   }
 
   const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(SHEET_2026);
-  const data  = sheet.getDataRange().getValues();
+  const data = sheet.getDataRange().getValues();
 
   for (const file of nuevos) {
     try {
       Logger.log(`Procesando: ${file.getName()}`);
       const datos = analizarFactura(file);
 
-      if (!datos || !datos.fecha || !datos.monto) {
+      if (!datos?.fecha || !datos.monto) {
         Logger.log(`⚠️ Gemini no pudo extraer datos de ${file.getName()}`);
         procesados.push(file.getId());
         continue;
@@ -100,23 +100,24 @@ function procesarFacturasNuevas() {
 
       const fila = buscarTransaccion(data, datos.fecha, datos.monto);
 
-      if (fila !== -1) {
-        const link = `https://drive.google.com/file/d/${file.getId()}/view`;
-        sheet.getRange(fila + 1, COL_FACTURA).setValue(link);
-
-        if (datos.hora) {
-          const fechaActualizada = actualizarHora(data[fila][COL_FECHA - 1], datos.hora);
-          if (fechaActualizada) {
-            sheet.getRange(fila + 1, COL_FECHA).setValue(fechaActualizada);
-          }
-        }
-
-        Logger.log(`  ✅ Match en fila ${fila + 1} — link guardado`);
-      } else {
+      if (fila === -1) {
         Logger.log(`  ❌ Sin match para fecha ${datos.fecha} / monto ${datos.monto}`);
-      procesados.push(file.getId());
+        procesados.push(file.getId());
+        continue;
       }
 
+      const link = `https://drive.google.com/file/d/${file.getId()}/view`;
+      sheet.getRange(fila + 1, COL_FACTURA).setValue(link);
+
+      if (datos.hora) {
+        const fechaActualizada = actualizarHora(data[fila][COL_FECHA - 1], datos.hora);
+        if (fechaActualizada) {
+          sheet.getRange(fila + 1, COL_FECHA).setValue(fechaActualizada);
+        }
+      }
+
+      Logger.log(`  ✅ Match en fila ${fila + 1} — link guardado`);
+      procesados.push(file.getId());
 
     } catch (e) {
       Logger.log(`❌ Error con ${file.getName()}: ${e.toString()}`);
@@ -128,7 +129,7 @@ function procesarFacturasNuevas() {
 
 // ─── Analiza la imagen con Gemini Vision ───────────────────────
 function analizarFactura(file) {
-  const base64   = Utilities.base64Encode(file.getBlob().getBytes());
+  const base64 = Utilities.base64Encode(file.getBlob().getBytes());
   const mimeType = file.getMimeType();
 
   const prompt = `Analiza este recibo o factura y extrae SOLO este JSON:
@@ -170,7 +171,7 @@ Reglas:
 function buscarTransaccion(data, fechaFactura, montoFactura) {
   const [dia, mes, anio] = fechaFactura.split('/').map(Number);
 
-  let filaUnica  = -1;
+  let filaUnica = -1;
   let conteoMonto = 0;
 
   for (let i = 1; i < data.length; i++) {
@@ -186,9 +187,9 @@ function buscarTransaccion(data, fechaFactura, montoFactura) {
     // Intento 1: coincidencia exacta fecha + monto
     const fecha = new Date(celda);
     if (!isNaN(fecha)) {
-      const mismaFecha = fecha.getDate()     === dia &&
-                        (fecha.getMonth()+1) === mes &&
-                         fecha.getFullYear() === anio;
+      const mismaFecha = fecha.getDate() === dia &&
+        (fecha.getMonth() + 1) === mes &&
+        fecha.getFullYear() === anio;
       if (mismaFecha) return i;
     }
   }
@@ -210,13 +211,13 @@ function actualizarHora(celdaFecha, horaStr) {
     const [h, m] = horaStr.split(':').map(Number);
     fecha.setHours(h, m, 0, 0);
     return fecha;
-  } catch(e) {
+  } catch (e) {
     return null;
   }
 }
 
 function esArchivoValido(mimeType) {
-  return ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/gif','application/pdf'].includes(mimeType);
+  return ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/gif', 'application/pdf'].includes(mimeType);
 }
 
 // ─── Ejecuta esto UNA SOLA VEZ para activar el trigger ─────────
@@ -240,8 +241,8 @@ function registrarPendiente(spreadsheet, file, datos) {
   // Crea la hoja si no existe
   if (!hoja) {
     hoja = spreadsheet.insertSheet(SHEET_PENDIENTES);
-    hoja.appendRow(['Archivo', 'Link', 'Fecha extraída', 'Monto extraído', 
-                    'Comercio', 'Procesado el', 'Estado']);
+    hoja.appendRow(['Archivo', 'Link', 'Fecha extraída', 'Monto extraído',
+      'Comercio', 'Procesado el', 'Estado']);
     hoja.setFrozenRows(1);
   }
 
