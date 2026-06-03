@@ -82,7 +82,8 @@ function procesarFacturasNuevas() {
     return;
   }
 
-  const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(SHEET_2026);
+  const spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const sheet = spreadsheet.getSheetByName(SHEET_2026);
   const data = sheet.getDataRange().getValues();
 
   for (const file of nuevos) {
@@ -102,6 +103,7 @@ function procesarFacturasNuevas() {
 
       if (fila === -1) {
         Logger.log(`  ❌ Sin match para fecha ${datos.fecha} / monto ${datos.monto}`);
+        registrarPendiente(spreadsheet, file, datos);
         procesados.push(file.getId());
         continue;
       }
